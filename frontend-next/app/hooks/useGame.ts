@@ -21,6 +21,7 @@ export function useGame(playerId: string) {
 
         wsRef.current.onopen = () => {
             connectedRef.current = true;
+            setConnected(true)
             wsRef.current?.send(JSON.stringify({ type: 'join', playerId }));
         };
 

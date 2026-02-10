@@ -12,7 +12,7 @@ let gameState = {
     pausedAt: null,
     isRunning: false,
   },
-  spread: 0,
+  spread: -1,
   marketMaker: "",
 };
 
@@ -47,6 +47,7 @@ wss.on('connection', (ws) => {
 
   ws.on('message', (msg) => {
     let data;
+    let flag = false;
     try {
       data = JSON.parse(msg);
     } catch (err) {
@@ -94,8 +95,14 @@ wss.on('connection', (ws) => {
         break;
 
       case 'action':
-        if (data.spread !== undefined) {
-          gameState.spread = data.spread;
+        if (data.action === "spread") {
+          if (gameState.spread > data.spread || gameState.spread == -1) {
+            gameState.spread = data.spread
+            gameState.marketMaker = ws.playerId
+            console.log(`New min spread set by ${ws.playerId}: ${data.spread}`);
+          } else {
+            flag = true;
+          }
         }
         break;
 
@@ -103,8 +110,10 @@ wss.on('connection', (ws) => {
         console.log('Unknown message type:', data.type);
     }
 
-    // Broadcast updated state to all clients
-    broadcastState();
+    if (!flag) {
+      // Broadcast updated state to all clients
+      broadcastState();
+    }
   });
 
   ws.on('close', () => {

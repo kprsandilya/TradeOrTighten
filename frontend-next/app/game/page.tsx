@@ -6,6 +6,7 @@ import { useTimer } from 'react-timer-hook';
 import { useGame } from '../hooks/useGame';
 import GameHistory from './gameHistory';
 import GamemasterPanel from './GamemasterDashboard';
+import Spread from './Spread';
 import { LogOut, Shuffle, Wifi, WifiOff } from 'lucide-react';
 
 function makeId(length: number) {
@@ -19,13 +20,14 @@ function makeId(length: number) {
 
 export default function Game() {
   const router = useRouter();
-    const [playerId, setPlayerId] = useState<string>("asdf");
+  const [playerId, setPlayerId] = useState<string>("aasdf");
 
   useEffect(() => {
     setPlayerId(crypto.randomUUID().slice(0, 8));
   }, []);
 
   const { gameStates, send, connected } = useGame(playerId);
+  console.log('connected state:', connected);
   const timer = gameStates[gameStates.length - 1]?.timer;
 
   const [spread, setSpread] = useState(-1);
@@ -41,7 +43,7 @@ export default function Game() {
       send({ type: 'join', playerId });
     }
     console.log("HERE" + connected)
-  }, [connected, send, playerId]);
+  }, [playerId]);
 
   // Update the timer display based on backend
   useEffect(() => {
@@ -88,7 +90,7 @@ export default function Game() {
 
           {/* Connection Status */}
           <div className="flex items-center gap-3 text-xs">
-            {!connected ? (
+            {connected ? (
               <div className="flex items-center gap-1.5 text-primary">
                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
                 <Wifi size={14} />
@@ -128,7 +130,10 @@ export default function Game() {
         {/* GameState History + Gamemaster Panel */}
         <div className="grid gap-4 grid-cols-2">
           <GameHistory playerId={playerId} />
-          <GamemasterPanel sendMessage={send} playerId={playerId} />
+          <div className="grid grid-rows-2 gap-4">
+                <GamemasterPanel sendMessage={send} playerId={playerId} />
+                <Spread playerId={playerId} sendMessage={send}/>
+          </div>
         </div>
       </div>
     </div>
