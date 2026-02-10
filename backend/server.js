@@ -13,6 +13,7 @@ let gameState = {
     isRunning: false,
   },
   spread: 0,
+  marketMaker: "",
 };
 
 // --- Gamemaster functions ---
