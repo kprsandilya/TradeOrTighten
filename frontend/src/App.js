@@ -19,13 +19,22 @@ function App() {
   const { messages, sendMessage } = useWebSocket('ws://localhost:8080');
   const [playerId] = useState('player1');
 
-  const joinGame = () => sendMessage({ type: 'join', playerId });
+  const [ingame, setIngame] = useState(false);
+
+  const joinGame = () => {
+    sendMessage({ type: 'join', playerId });
+    setIngame(true);
+  }
+  const leaveGame = () => {
+    sendMessage({ type: 'leave', playerId });
+    setIngame(false)
+  }
   const makeTrade = () => sendMessage({ type: 'trade', trade: { playerId, value: Math.floor(Math.random() * 100) } });
 
   return (
     <Box sx={{ p: 4 }}>
       <Typography variant="h4" gutterBottom>Trade Game</Typography>
-      <Button variant="contained" onClick={joinGame} sx={{ mr: 2 }}>Join Game</Button>
+      {ingame ? <Button variant="contained" onClick={leaveGame} sx={{ mr: 2 }}>Leave Game</Button> : <Button variant="contained" onClick={joinGame} sx={{ mr: 2 }}>Join Game</Button>}
       <Button variant="contained" color="secondary" onClick={makeTrade}>Make Trade</Button>
 
       <Paper sx={{ mt: 4, p: 2, maxHeight: 300, overflow: 'auto' }}>

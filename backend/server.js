@@ -29,6 +29,8 @@ wss.on('connection', ws => {
       gameState.players[data.playerId] = { points: 0 };
     } else if (data.type === 'trade') {
       gameState.trades.push(data.trade);
+    } else if (data.type === 'leave') {
+        delete gameState.players[data.playerId];
     } else if (data.type === 'gamemaster') {
       const fn = gamemasterFunctions[data.fn];
       if (fn) fn(...data.args);
