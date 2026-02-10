@@ -5,7 +5,13 @@ const wss = new WebSocket.Server({ port: PORT });
 
 let gameState = {
   players: {},
-  trades: []
+  trades: [],
+  timer: {
+    duration: null,
+    startedAt: null,
+    pausedAt: null,
+    isRunning: false
+  }
 };
 
 const gamemasterFunctions = {
@@ -34,6 +40,46 @@ wss.on('connection', ws => {
     } else if (data.type === 'gamemaster') {
       const fn = gamemasterFunctions[data.fn];
       if (fn) fn(...data.args);
+    } 
+    
+    else if (data.type === 'timer') {
+      const now = Date.now();
+
+      if (data.action === 'start') {
+        gameState.timer = {
+          duration: data.duration,     // seconds
+          startedAt: now,
+          pausedAt: null,
+          isRunning: true
+        };
+      }
+
+      if (data.action === 'pause' && gameState.timer.isRunning) {
+        const elapsed = (now - gameState.timer.startedAt) / 1000;
+        const remaining = gameState.timer.duration - elapsed;
+
+        gameState.timer = {
+          duration: Math.max(remaining, 0),
+          startedAt: null,
+          pausedAt: now,
+          isRunning: false
+        };
+      }
+
+      if (data.action === 'resume' && !gameState.timer.isRunning) {
+        gameState.timer.startedAt = now;
+        gameState.timer.pausedAt = null;
+        gameState.timer.isRunning = true;
+      }
+
+      if (data.action === 'reset') {
+        gameState.timer = {
+          duration: null,
+          startedAt: null,
+          pausedAt: null,
+          isRunning: false
+        };
+      }
     }
 
     wss.clients.forEach(client => {
