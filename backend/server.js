@@ -11,7 +11,8 @@ let gameState = {
     startedAt: null,
     pausedAt: null,
     isRunning: false
-  }
+  },
+  spread: 0,
 };
 
 const gamemasterFunctions = {
@@ -82,6 +83,41 @@ wss.on('connection', ws => {
       }
     }
 
+    // else if (data.type === 'action') {
+    //   const now = Date.now();
+
+    //   if (data.action === 'spread') {
+    //     gameState.spread = Math.min(gameState.spread, data.spread)
+    //   }
+
+    //   if (data.action === 'pause' && gameState.timer.isRunning) {
+    //     const elapsed = (now - gameState.timer.startedAt) / 1000;
+    //     const remaining = gameState.timer.duration - elapsed;
+
+    //     gameState.timer = {
+    //       duration: Math.max(remaining, 0),
+    //       startedAt: null,
+    //       pausedAt: now,
+    //       isRunning: false
+    //     };
+    //   }
+
+    //   if (data.action === 'resume' && !gameState.timer.isRunning) {
+    //     gameState.timer.startedAt = now;
+    //     gameState.timer.pausedAt = null;
+    //     gameState.timer.isRunning = true;
+    //   }
+
+    //   if (data.action === 'reset') {
+    //     gameState.timer = {
+    //       duration: null,
+    //       startedAt: null,
+    //       pausedAt: null,
+    //       isRunning: false
+    //     };
+    //   }
+    // }
+
     wss.clients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(JSON.stringify(gameState));
@@ -89,7 +125,12 @@ wss.on('connection', ws => {
     });
   });
 
-  ws.on('close', () => console.log('Client disconnected'));
+    ws.on('close', () => {
+      console.log("Client Disconnected")
+      if (ws.playerId) {
+        delete gameState.players[ws.playerId];
+      }
+    });
 });
 
 console.log(`WebSocket server running on ws://localhost:${PORT}`);

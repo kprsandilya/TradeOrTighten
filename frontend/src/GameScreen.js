@@ -37,10 +37,12 @@ function makeid(length) {
 
 function Game() {
     const navigate = useNavigate();
-    const { messages, sendMessage } = useWebSocket('ws://localhost:8080');
+    const { messages, sendMessage, connected } = useWebSocket('ws://localhost:8080');
     const [playerId] = useState(makeid(8));
     const gameState = messages[messages.length - 1];
     const timer = gameState?.timer;
+    const [stage, setStage] = useState("spread");
+    const [spread, setSpread] = useState(-1);
 
     const {
         seconds,
@@ -53,25 +55,46 @@ function Game() {
     });
 
     useEffect(() => {
-        if (!timer || !timer.startedAt) return;
+        if (connected) {
+            sendMessage({ type: 'join', playerId });
+        }
+    }, [connected]);
 
-        if (!timer.isRunning) {
+    useEffect(() => {
+        if (!timer) return;
+
+        // 🔁 RESET (explicit reset only)
+        if (!timer.startedAt && !timer.isRunning && timer.duration === null) {
+            pause();
+            restart(new Date(), false);
+            return;
+        }
+
+        // ⏸️ PAUSE (keep remaining time!)
+        if (!timer.isRunning && timer.duration > 0) {
             pause();
             return;
         }
 
-        const expiry = new Date(
+        // ▶️ START / RESUME
+        if (timer.startedAt) {
+            const expiry = new Date(
             timer.startedAt + timer.duration * 1000
-        );
-
-        restart(expiry, true);
-    }, [timer]);
+            );
+            restart(expiry, true);
+        }
+    }, [timer, pause, restart]);
 
     const leaveGame = () => {
         sendMessage({ type: 'leave', playerId });
         navigate('/')
     }
     const makeTrade = () => sendMessage({ type: 'trade', trade: { playerId, value: Math.floor(Math.random() * 100) } });
+
+    const sendSpread = () => {
+        sendMessage({ type: 'action', spread: spread });
+        navigate('/')
+    }
 
     return (
         <Box sx={{ p: 4 }}>
