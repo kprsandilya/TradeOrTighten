@@ -8,43 +8,57 @@ export type GameState = {
 };
 
 export function useGame(playerId: string) {
-    // Store an array of game states
-    const [gameStates, setGameStates] = useState<GameState[]>([]);
-    const wsRef = useRef<WebSocket | null>(null);
-    const [connected, setConnected] = useState(false);
-    const connectedRef = useRef(false);
+  const [gameStates, setGameStates] = useState<GameState[]>([]);
+  const [connected, setConnected] = useState(false);
 
-    useEffect(() => {
-        if (connectedRef.current) return; // skip if already connected
+  const wsRef = useRef<WebSocket | null>(null);
+  const connectedRef = useRef(false);
 
-        wsRef.current = new WebSocket('ws://localhost:8080');
+  // Initialize WebSocket once
+  useEffect(() => {
+    if (connectedRef.current) return; // prevent duplicate connections
 
-        wsRef.current.onopen = () => {
-            connectedRef.current = true;
-            setConnected(true)
-            wsRef.current?.send(JSON.stringify({ type: 'join', playerId }));
-        };
+    const ws = new WebSocket('ws://localhost:8080');
+    wsRef.current = ws;
 
-        wsRef.current.onmessage = (event) => {
-            const newState = JSON.parse(event.data);
-            setGameStates((prev) => {
-                const last = prev[prev.length - 1];
-                if (JSON.stringify(last) === JSON.stringify(newState)) return prev;
-                return [...prev, newState];
-            });
-        };
+    ws.onopen = () => {
+      connectedRef.current = true;
+      setConnected(true);
+      console.log('WebSocket connected', playerId);
 
-        return () => {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'leave', playerId }));
-        }
-        wsRef.current?.close();
-        };
-    }, [playerId]);
+      // Send join immediately
+      ws.send(JSON.stringify({ type: 'join', playerId }));
+    };
+
+    ws.onmessage = (event) => {
+      const newState = JSON.parse(event.data);
+      setGameStates((prev) => {
+        const last = prev[prev.length - 1];
+        if (JSON.stringify(last) === JSON.stringify(newState)) return prev;
+        return [...prev, newState];
+      });
+    };
+
+    ws.onclose = () => {
+      connectedRef.current = false;
+      setConnected(false);
+      console.log('WebSocket disconnected', playerId);
+    };
+
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'leave', playerId }));
+      }
+      ws.close();
+      connectedRef.current = false;
+    };
+  }, [playerId]);
 
   const send = (data: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
+    } else {
+      console.warn('WebSocket not connected yet:', data);
     }
   };
 

@@ -7,45 +7,29 @@ import { useGame } from '../hooks/useGame';
 import GameHistory from './gameHistory';
 import GamemasterPanel from './GamemasterDashboard';
 import Spread from './Spread';
-import { LogOut, Shuffle, Wifi, WifiOff } from 'lucide-react';
-
-function makeId(length: number) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+import { LogOut, Shuffle } from 'lucide-react';
 
 export default function Game() {
   const router = useRouter();
-  const [playerId, setPlayerId] = useState<string>("aasdf");
 
+  const [playerId, setPlayerId] = useState<string | null>(null);
+
+  // generate stable playerId on the client
   useEffect(() => {
     setPlayerId(crypto.randomUUID().slice(0, 8));
   }, []);
 
+  // always call useGame, pass playerId as null if not ready
   const { gameStates, send, connected } = useGame(playerId);
-  console.log('connected state:', connected);
-  const timer = gameStates[gameStates.length - 1]?.timer;
 
+const timer = gameStates[gameStates.length - 1]?.timer;
   const [spread, setSpread] = useState(-1);
 
   const { seconds, minutes, pause, restart } = useTimer({
     expiryTimestamp: new Date(),
     autoStart: false,
   });
-
-  // Join the game once connected
-  useEffect(() => {
-    if (connected) {
-      send({ type: 'join', playerId });
-    }
-    console.log("HERE" + connected)
-  }, [playerId]);
-
-  // Update the timer display based on backend
+    // Timer syncing with backend
   useEffect(() => {
     if (!timer) return;
 
@@ -66,13 +50,22 @@ export default function Game() {
     }
   }, [timer, pause, restart]);
 
+  // render loading if playerId not yet set
+  if (!playerId) return <div>Loading...</div>;
+
   const leaveGame = () => {
     send({ type: 'leave', playerId });
     router.push('/');
   };
 
-  const makeTrade = () =>
+  const makeTrade = () => {
     send({ type: 'trade', trade: { playerId, value: Math.floor(Math.random() * 100) } });
+  };
+
+  const setSpreadValue = (value: number) => {
+    setSpread(value);
+    send({ type: 'spread', playerId, value });
+  };
 
   return (
     <div className="min-h-screen bg-background p-6 md:p-8">
@@ -88,51 +81,27 @@ export default function Game() {
             </p>
           </div>
 
-          {/* Connection Status */}
           <div className="flex items-center gap-3 text-xs">
-            {connected ? (
-              <div className="flex items-center gap-1.5 text-primary">
-                <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-                <Wifi size={14} />
-                <span className="text-muted-foreground">Connected</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-destructive">
-                <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-                <WifiOff size={14} />
-                <span className="text-muted-foreground">Disconnected</span>
-              </div>
-            )}
+            {connected ? <span>Connected</span> : <span>Disconnected</span>}
           </div>
         </div>
 
-        {/* Timer */}
-        <h2 className="text-2xl font-bold mb-2">
-          Timer: {minutes}:{seconds.toString().padStart(2, '0')}
-        </h2>
-
         {/* Actions */}
         <div className="flex gap-3 mb-4">
-          <button
-            onClick={leaveGame}
-            className="flex items-center gap-2 rounded-md bg-secondary py-2.5 px-2 text-sm font-medium neon-soft-border text-secondary-foreground hover:bg-secondary/70 transition"
-          >
+          <button onClick={leaveGame} className="btn-secondary">
             <LogOut size={16} /> Leave Game
           </button>
-          <button
-            onClick={makeTrade}
-            className="flex items-center gap-2 rounded-md bg-primary/10 py-2.5 px-2 text-sm font-medium text-primary neon-soft-border hover:bg-primary/20 transition"
-          >
+          <button onClick={makeTrade} className="btn-primary">
             <Shuffle size={16} /> Make Trade
           </button>
         </div>
 
-        {/* GameState History + Gamemaster Panel */}
+        {/* GameState */}
         <div className="grid gap-4 grid-cols-2">
           <GameHistory playerId={playerId} />
           <div className="grid grid-rows-2 gap-4">
-                <GamemasterPanel sendMessage={send} playerId={playerId} />
-                <Spread playerId={playerId} sendMessage={send}/>
+            <GamemasterPanel sendMessage={send} playerId={playerId} />
+            <Spread playerId={playerId} sendMessage={send} />
           </div>
         </div>
       </div>
