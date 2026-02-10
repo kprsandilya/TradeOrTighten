@@ -10,127 +10,163 @@ let gameState = {
     duration: null,
     startedAt: null,
     pausedAt: null,
-    isRunning: false
+    isRunning: false,
   },
   spread: 0,
 };
 
+// --- Gamemaster functions ---
 const gamemasterFunctions = {
   bonusPoints: (playerId, amount) => {
-    if (gameState.players[playerId]) {
-      gameState.players[playerId].points += amount;
+    if (!playerId || typeof amount !== 'number') {
+      console.log('Invalid bonusPoints args', playerId, amount);
+      return;
     }
+    if (!gameState.players[playerId]) {
+      console.log('Player not found:', playerId);
+      return;
+    }
+    gameState.players[playerId].points += amount;
+    console.log(`Gave ${amount} points to ${playerId}`);
   },
-  marketCrash: () => {
-    gameState.trades.forEach(trade => trade.value *= 0.5);
-  }
 };
 
-wss.on('connection', ws => {
+// --- Broadcast helper ---
+function broadcastState() {
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(gameState));
+    }
+  });
+}
+
+// --- Handle connections ---
+wss.on('connection', (ws) => {
   console.log('Client connected');
 
-  ws.on('message', msg => {
-    const data = JSON.parse(msg);
+  ws.on('message', (msg) => {
+    let data;
+    try {
+      data = JSON.parse(msg);
+    } catch (err) {
+      console.error('Invalid JSON:', msg);
+      return;
+    }
 
-    if (data.type === 'join') {
-      gameState.players[data.playerId] = { points: 0 };
-    } else if (data.type === 'trade') {
-      gameState.trades.push(data.trade);
-    } else if (data.type === 'leave') {
-        delete gameState.players[data.playerId];
-    } else if (data.type === 'gamemaster') {
-      const fn = gamemasterFunctions[data.fn];
-      if (fn) fn(...data.args);
-    } 
-    
-    else if (data.type === 'timer') {
-      const now = Date.now();
+    switch (data.type) {
+      case 'join':
+        if (data.playerId && !gameState.players[data.playerId]) {
+          gameState.players[data.playerId] = { points: 0 };
+          ws.playerId = data.playerId;
+          console.log('Player joined:', data.playerId);
+        }
+        break;
 
-      if (data.action === 'start') {
-        gameState.timer = {
-          duration: data.duration,     // seconds
-          startedAt: now,
-          pausedAt: null,
-          isRunning: true
-        };
-      }
+      case 'leave':
+        if (data.playerId && gameState.players[data.playerId]) {
+          delete gameState.players[data.playerId];
+          console.log('Player left:', data.playerId);
+        }
+        break;
 
-      if (data.action === 'pause' && gameState.timer.isRunning) {
+      case 'trade':
+        if (data.trade) {
+          gameState.trades.push(data.trade);
+          console.log('Trade added:', data.trade);
+        }
+        break;
+
+      case 'gamemaster':
+        if (data.fn && gamemasterFunctions[data.fn]) {
+          try {
+            gamemasterFunctions[data.fn](...(data.args || []));
+          } catch (err) {
+            console.error('Error executing gamemaster function:', err);
+          }
+        } else {
+          console.log('Unknown gamemaster function:', data.fn);
+        }
+        break;
+
+      case 'timer':
+        handleTimer(data);
+        break;
+
+      case 'action':
+        if (data.spread !== undefined) {
+          gameState.spread = data.spread;
+        }
+        break;
+
+      default:
+        console.log('Unknown message type:', data.type);
+    }
+
+    // Broadcast updated state to all clients
+    broadcastState();
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+    if (ws.playerId && gameState.players[ws.playerId]) {
+      delete gameState.players[ws.playerId];
+      console.log('Player removed:', ws.playerId);
+      broadcastState(); // update other clients
+    }
+  });
+});
+
+// --- Timer logic ---
+function handleTimer(data) {
+  const now = Date.now();
+
+  switch (data.action) {
+    case 'start':
+      gameState.timer = {
+        duration: data.duration || 0,
+        startedAt: now,
+        pausedAt: null,
+        isRunning: true,
+      };
+      console.log('Timer started:', gameState.timer.duration);
+      break;
+
+    case 'pause':
+      if (gameState.timer.isRunning && gameState.timer.startedAt) {
         const elapsed = (now - gameState.timer.startedAt) / 1000;
-        const remaining = gameState.timer.duration - elapsed;
-
+        const remaining = Math.max(gameState.timer.duration - elapsed, 0);
         gameState.timer = {
-          duration: Math.max(remaining, 0),
+          duration: remaining,
           startedAt: null,
           pausedAt: now,
-          isRunning: false
+          isRunning: false,
         };
+        console.log('Timer paused, remaining:', remaining);
       }
+      break;
 
-      if (data.action === 'resume' && !gameState.timer.isRunning) {
+    case 'resume':
+      if (!gameState.timer.isRunning && gameState.timer.duration) {
         gameState.timer.startedAt = now;
         gameState.timer.pausedAt = null;
         gameState.timer.isRunning = true;
+        console.log('Timer resumed');
       }
+      break;
 
-      if (data.action === 'reset') {
-        gameState.timer = {
-          duration: null,
-          startedAt: null,
-          pausedAt: null,
-          isRunning: false
-        };
-      }
-    }
+    case 'reset':
+      gameState.timer = {
+        duration: null,
+        startedAt: null,
+        pausedAt: null,
+        isRunning: false,
+      };
+      console.log('Timer reset');
+      break;
 
-    // else if (data.type === 'action') {
-    //   const now = Date.now();
-
-    //   if (data.action === 'spread') {
-    //     gameState.spread = Math.min(gameState.spread, data.spread)
-    //   }
-
-    //   if (data.action === 'pause' && gameState.timer.isRunning) {
-    //     const elapsed = (now - gameState.timer.startedAt) / 1000;
-    //     const remaining = gameState.timer.duration - elapsed;
-
-    //     gameState.timer = {
-    //       duration: Math.max(remaining, 0),
-    //       startedAt: null,
-    //       pausedAt: now,
-    //       isRunning: false
-    //     };
-    //   }
-
-    //   if (data.action === 'resume' && !gameState.timer.isRunning) {
-    //     gameState.timer.startedAt = now;
-    //     gameState.timer.pausedAt = null;
-    //     gameState.timer.isRunning = true;
-    //   }
-
-    //   if (data.action === 'reset') {
-    //     gameState.timer = {
-    //       duration: null,
-    //       startedAt: null,
-    //       pausedAt: null,
-    //       isRunning: false
-    //     };
-    //   }
-    // }
-
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(gameState));
-      }
-    });
-  });
-
-    ws.on('close', () => {
-      console.log("Client Disconnected")
-      if (ws.playerId) {
-        delete gameState.players[ws.playerId];
-      }
-    });
-});
+    default:
+      console.log('Unknown timer action:', data.action);
+  }
+}
 
 console.log(`WebSocket server running on ws://localhost:${PORT}`);
